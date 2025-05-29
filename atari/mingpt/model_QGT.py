@@ -251,8 +251,11 @@ class DecisionTransformer(nn.Module):
 
         upper_bounds = upper_bounds.unsqueeze(-1) # shape: (B, k, D)
         upper_bounds_embedding = self.upper_bound_embedding(upper_bounds)    
+        print(upper_bounds_embedding.shape)
+        print(token_embeddings.shape)
         token_embeddings = torch.cat([upper_bounds_embedding, token_embeddings], dim=1)
-
+        print(token_embeddings.shape)
+        time.sleep(100)
         ub_mask = torch.ones((triplet_mask.shape[0], upper_bounds.shape[1]), dtype=triplet_mask.dtype, device=triplet_mask.device)
         ub_mask = ub_mask.unsqueeze(-1)
         triplet_mask = torch.cat([ub_mask, triplet_mask], dim=1)  # shape becomes (B, T+ub_len)
