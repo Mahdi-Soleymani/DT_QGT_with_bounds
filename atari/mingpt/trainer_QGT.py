@@ -109,10 +109,10 @@ class Trainer:
         with torch.no_grad():
             total_correct = 0.0
             total_tokens = 0
-            for q, r, rtg, mask_lengths in self.val_dataloader:
+            for q, r, rtg, mask_lengths, upper_bounds in self.val_dataloader:
                 # Move data to GPU if available
                 q, r, rtg, mask_lengths = q.to(self.device), r.to(self.device), rtg.to(self.device), mask_lengths.to(self.device)
-                probs_val, loss_val = self.model(mask_lengths,rtg, r, q, q)   
+                probs_val, loss_val = self.model(mask_lengths,rtg, upper_bounds, q, q)   
                 loss = loss_val.mean()
                 losses_val.append(loss.item())
                 preds = (probs_val > 0.5).float()   
