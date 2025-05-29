@@ -19,6 +19,7 @@ import os
 
 class TrainerConfig:
     k=10
+    upper_bound_dim = 10 
     max_epochs = 10
     batch_size = 64
     betas = (0.9, 0.95)

@@ -6,6 +6,7 @@ from tqdm import tqdm
 import argparse
 import os
 import multiprocessing as mp
+import concurrent.futures
 
 def pad_sequence(seq, max_len, pad_value=0):
     seq = np.array(seq, dtype=np.int8)
@@ -100,21 +101,75 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
     rtg_padded = pad_sequence(rtg[:max_len], max_len, pad_scalar_val)
     return q_padded, r_padded, rtg_padded, np.int8(mask_length), np.squeeze(x)
 
-def save_covmax_dataset(file_name, num_samples, k, max_len, pad_scalar_val, pad_vec_val):
+def generate_and_store_sample(worker_id, num_samples_per_worker, k, max_len, pad_scalar_val, pad_vec_val, file_prefix):
+    file_name = f"{file_prefix}_{worker_id}.h5"
     with h5py.File(file_name, 'w') as f:
-        d_queries = f.create_dataset("queries", (num_samples, max_len, k), dtype='i1')
-        d_results = f.create_dataset("results", (num_samples, max_len), dtype='i1')
-        d_rtgs = f.create_dataset("rtgs", (num_samples, max_len), dtype='i1')
-        d_mask_lengths = f.create_dataset("mask_lengths", (num_samples,), dtype='i1')
-        d_bounds = f.create_dataset("upper_bounds", (num_samples, k), dtype='i1')
+        d_queries = f.create_dataset("queries", (num_samples_per_worker, max_len, k), dtype='i1')
+        d_results = f.create_dataset("results", (num_samples_per_worker, max_len), dtype='i1')
+        d_rtgs = f.create_dataset("rtgs", (num_samples_per_worker, max_len), dtype='i1')
+        d_mask_lengths = f.create_dataset("mask_lengths", (num_samples_per_worker,), dtype='i1')
+        d_bounds = f.create_dataset("upper_bounds", (num_samples_per_worker, k), dtype='i1')
 
-        for i in tqdm(range(num_samples), desc="Generating dataset"):
+        pbar = tqdm(total=num_samples_per_worker, position=worker_id, desc=f"Worker {worker_id}", leave=True)
+
+        for i in range(num_samples_per_worker):
             q, r, rtg, mask_length, d_bound = generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_val)
             d_queries[i] = q
             d_results[i] = r
             d_rtgs[i] = rtg
             d_mask_lengths[i] = mask_length
             d_bounds[i] = d_bound
+            pbar.update(1)
+        pbar.close()
+
+    print(f"Worker {worker_id} saved {num_samples_per_worker} samples to {file_name}")
+
+def merge_datasets(input_files, output_file):
+    with h5py.File(output_file, 'w') as f_out:
+        for i, file in enumerate(input_files):
+            with h5py.File(file, 'r') as f_in:
+                for key in f_in.keys():
+                    data = f_in[key][:]
+                    if key in f_out:
+                        f_out[key].resize((f_out[key].shape[0] + data.shape[0]), axis=0)
+                        f_out[key][-data.shape[0]:] = data
+                    else:
+                        maxshape = (None,) + data.shape[1:]
+                        f_out.create_dataset(key, data=data, maxshape=maxshape, chunks=True)
+    for file in input_files:
+        os.remove(file)
+
+def save_dataset_parallel(filename, num_samples, k, max_len, pad_scalar_val, pad_vec_val, num_cores):
+    file_prefix = "temp_sample_file_worker"
+    print(f"Using {num_cores} CPU cores for parallel processing...")
+    samples_per_worker = num_samples // num_cores
+    extra_samples = num_samples % num_cores
+
+    with concurrent.futures.ProcessPoolExecutor(max_workers=num_cores) as executor:
+        futures = []
+        for worker_id in range(num_cores):
+            num_samples_for_worker = samples_per_worker + (1 if worker_id < extra_samples else 0)
+            if num_samples_for_worker > 0:
+                futures.append(executor.submit(
+                    generate_and_store_sample,
+                    worker_id,
+                    num_samples_for_worker,
+                    k,
+                    max_len,
+                    pad_scalar_val,
+                    pad_vec_val,
+                    file_prefix
+                ))
+        concurrent.futures.wait(futures)
+
+    worker_files = [f"{file_prefix}_{worker_id}.h5" for worker_id in range(num_cores) if os.path.exists(f"{file_prefix}_{worker_id}.h5")]
+    merge_datasets(worker_files, filename)
+
+def count_samples_in_h5(file_name):
+    with h5py.File(file_name, 'r') as f:
+        queries = f['queries']
+        num_samples = queries.shape[0]
+        print(f"Number of samples in {file_name}: {num_samples}")
 
 if __name__ == '__main__':
     mp.set_start_method("spawn", force=True)
@@ -130,12 +185,10 @@ if __name__ == '__main__':
     pad_scalar_val = -10
     pad_vec_val = -30
     f_name = f"{args.file_name}_k{k}.h5"
+    n_cores = min(args.n_cores, os.cpu_count())
 
-    save_covmax_dataset(f_name, args.num_samples, k, max_len, pad_scalar_val, pad_vec_val)
-
-    with h5py.File(f_name, 'r') as f:
-        num_samples = f['queries'].shape[0]
-        print(f"Number of samples in {f_name}: {num_samples}")
+    save_dataset_parallel(f_name, args.num_samples, k, max_len, pad_scalar_val, pad_vec_val, n_cores)
+    count_samples_in_h5(f_name)
 
     file_size_mb = os.path.getsize(f_name) / (1024 * 1024)
     print(f"File size: {file_size_mb:.2f} MB")
