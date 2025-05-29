@@ -82,6 +82,7 @@ set_seed(args.seed)
 # Initialize the TrainerConfig using command-line arguments
 config = t.TrainerConfig(
     k=args.k,
+    upper_bound_dim=args.k,
     query_dim=0,
     max_epochs=args.epochs,
     batch_size=args.batch_size,
@@ -163,6 +164,9 @@ def dataset():
         results = results[:N_unique].repeat(repeat_factor, 1)
         rtgs = rtgs[:N_unique].repeat(repeat_factor, 1)
         mask_lengths = mask_lengths[:N_unique].repeat(repeat_factor)
+        upper_bounds = upper_bounds[:N_unique].repeat(repeat_factor, 1)
+
+
 
         print(f"Dataset shape after repeat: {queries.shape}")
 
@@ -177,8 +181,10 @@ def dataset():
             results = torch.tensor(f["results"][:], dtype=torch.float32)
             rtgs = torch.tensor(f["rtgs"][:], dtype=torch.float32)
             mask_lengths = torch.tensor(f["mask_lengths"][:], dtype=torch.long)
+            upper_bounds = torch.tensor(f["upper_bounds"][:], dtype=torch.float32)
 
-        dataset = TensorDataset(queries, results, rtgs, mask_lengths)
+
+        dataset = TensorDataset(queries, results, rtgs, mask_lengths, upper_bounds)
         #self.data_loader = DataLoader(dataset, batch_size=self.config.batch_size, shuffle=True, num_workers=self.config.num_workers)
         return dataset
 
