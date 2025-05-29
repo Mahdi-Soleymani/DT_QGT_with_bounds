@@ -258,7 +258,7 @@ def main():
    
     if rank==0:
         #wandb.init(mpde="disabled")
-        wandb.init(project=f"DT_k{config.k}", config=config)
+        wandb.init(project=f"DT_with_bounds_k{config.k}", config=config)
         print(f"Total dataset size: {train_size} samples")
 
 
