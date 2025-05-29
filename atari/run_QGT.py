@@ -149,7 +149,7 @@ def dataset():
             results = torch.tensor(f["results"][: N_unique], dtype=torch.float32)
             rtgs = torch.tensor(f["rtgs"][: N_unique], dtype=torch.float32)
             mask_lengths = torch.tensor(f["mask_lengths"][: N_unique], dtype=torch.long)
-
+            upper_bounds = torch.tensor(f["upper_bounds"][: N_unique], dtype=torch.float32)
         # Print shapes for debugging
         print("queries shape before repeat:", queries.shape)
 
