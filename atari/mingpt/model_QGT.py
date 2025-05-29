@@ -238,6 +238,17 @@ class DecisionTransformer(nn.Module):
             triplet_mask=torch.zeros(3*query_results.shape[1])
             triplet_mask[2*mask_length]=1
 
+
+
+        # Ensure upper_bounds is always 2D before unsqueeze
+        if upper_bounds.ndim == 3 and upper_bounds.shape[-1] == 1:
+            upper_bounds = upper_bounds.squeeze(-1)
+        elif upper_bounds.ndim != 2:
+            raise ValueError(f"upper_bounds should be 2D [B, k], got {upper_bounds.shape}")
+
+
+
+
         upper_bounds = upper_bounds.unsqueeze(-1) # shape: (B, k, D)
         upper_bounds_embedding = self.upper_bound_embedding(upper_bounds)    
         token_embeddings = torch.cat([upper_bounds_embedding, token_embeddings], dim=1)
