@@ -43,7 +43,10 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
     model.setParam(GRB.Param.Threads, 1)
 
     variables = [model.addVar(vtype=GRB.INTEGER, lb=0, ub=int(x[i].item()), name=f"x{i}") for i in range(k)]
+    
     model.setParam(GRB.Param.PoolSearchMode, 2)
+    model.setParam(GRB.Param.PoolSolutions, 1000)
+    
     model.setObjective(1, GRB.MAXIMIZE)
     model.optimize()
 

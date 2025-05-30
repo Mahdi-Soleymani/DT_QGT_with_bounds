@@ -67,7 +67,7 @@ def pad_sequence2d(seq, max_len, pad_value=0):
 
 def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     # Initialize the model and config
-    mode="random"
+    #mode="random"
     #mode="DT"
     sampling="soft"
     #sampling="c"
@@ -106,8 +106,8 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     config.desired_num_of_queries=desired_num_of_queries
     # Initialize your model architecture (it should be the same as during training)
     DT_model = QGT_model(config)  # Use the same configuration used during training
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
-
+    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    device='cpu'
     # Load the saved model checkpoint  
     
     #checkpoint = torch.load("comic-mountain-67.pth",  map_location=torch.device("cpu"))
@@ -332,7 +332,8 @@ def main():
 
     numbers, flags = zip(*results)
     result=np.array(numbers)
-    # print(result.mean())
+    print(f"des_len:{args.des_len}")
+    print(result.mean())
     # print(result.std())
     # print(sum(flags))
     return result.mean()
