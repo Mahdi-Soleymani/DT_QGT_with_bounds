@@ -95,6 +95,7 @@ class Trainer:
 
 
     def save_checkpoint(self):
+        os.makedirs("models", exist_ok=True)
         raw_model = self.model.module if hasattr(self.model, "module") else self.model
         model_filename = f"models/{wandb.run.name}.pth"
         logger.info("saving %s", model_filename)
