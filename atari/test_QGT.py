@@ -123,8 +123,10 @@ def test_sample(desired_num_of_queries,k):
     #checkpoint = torch.load("colorful-eon-1.pth",  map_location='cpu', weights_only=True) #k=3
     #checkpoint = torch.load("deep-darkness-1.pth",  map_location='cpu', weights_only=True)  #k=2
     #checkpoint = torch.load("desert-vortex-1.pth",  map_location='cpu', weights_only=True) #k=6
-    checkpoint = torch.load("grateful-fire-1.pth",  map_location='cpu', weights_only=True) #k=7
+    #checkpoint = torch.load("grateful-fire-1.pth",  map_location='cpu', weights_only=True) #k=7
     #checkpoint = torch.load("volcanic-dawn-1.pth",  map_location='cpu', weights_only=True) #k=8
+    checkpoint = torch.load("revived-feather-12.pth",  map_location='cpu', weights_only=True) #k=8
+    #checkpoint = torch.load("northern-smoke-8.pth",  map_location='cpu', weights_only=True) #k=8
 
     
     
@@ -198,7 +200,10 @@ def test_sample(desired_num_of_queries,k):
             if mode=="DT":
                 
                 ### from model
-                probs,_=DT_model( mask_length, rtgs,  results, queries)
+                upper_bounds = torch.tensor(x, dtype=torch.float32).to(device)
+                upper_bounds = upper_bounds.unsqueeze(0)  # Shape: (1, k)
+
+                probs,_=DT_model( mask_length, rtgs,  results, upper_bounds, queries)
                 if num_of_constraints<config.k:
                     probs=probs[:,num_of_constraints,:]
                 else:
@@ -302,7 +307,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--num_iter", type=int, default=10, help="Number of iterations")
     parser.add_argument("--num_cores", type=int, default=6, help="Number of CPU cores to use")
-    parser.add_argument("--des_len", type=int, default=3, help="Number of CPU cores to use")
+    parser.add_argument("--des_len", type=int, default=6, help="Number of CPU cores to use")
     parser.add_argument("--k", type=int, default=10, help="k")
 
     args = parser.parse_args()
