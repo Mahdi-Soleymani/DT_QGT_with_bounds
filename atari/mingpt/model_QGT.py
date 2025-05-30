@@ -224,8 +224,8 @@ class DecisionTransformer(nn.Module):
             token_embeddings[:,2::3,:] = query_embeddings
 
             for i, length in enumerate(mask_length):
-                triplet_mask[i, :int((3 * length - 1).item())] = 1  # Set valid part to 1
-                triplet_mask[i, int((3 * length - 1).item()):] = 0  # Set the remaining part to 0
+                triplet_mask[i, :int((3 * length ).item())-1] = 1  # Set valid part to 1
+                triplet_mask[i, int((3 * length ).item())-1:] = 0  # Set the remaining part to 0
            
             #print(triplet_mask)
             # time.sleep(60)
@@ -301,7 +301,7 @@ class DecisionTransformer(nn.Module):
         #time.sleep(1)
         if queries is not None:
             #logits = logits[:, 1::3, :] # only keep predictions from query_embeddings
-            logits = logits[:, upper_bounds.shape[1] + 2::3, :]  # Adjusted for upper_bounds prefix
+            logits = logits[:, upper_bounds.shape[1] + 1::3, :]  # Adjusted for upper_bounds prefix
 
         # elif queries is None:
         #     logits = logits[:, 1:, :]
