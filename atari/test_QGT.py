@@ -251,7 +251,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
         for i in range(config.k):
             if next_query[i]==1:
                 selected_variables.append(variables[i])
-
+        next_query = next_query.to(x_half_tensor.device)
         new_result=torch.matmul(next_query,x_half_tensor)
         constraint = sum(selected_variables) == new_result.item()
         
