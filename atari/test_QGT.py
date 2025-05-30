@@ -65,7 +65,7 @@ def pad_sequence2d(seq, max_len, pad_value=0):
 
 
 
-def test_sample(desired_num_of_queries,k):
+def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     # Initialize the model and config
     mode="random"
     #mode="DT"
@@ -106,6 +106,7 @@ def test_sample(desired_num_of_queries,k):
     config.desired_num_of_queries=desired_num_of_queries
     # Initialize your model architecture (it should be the same as during training)
     DT_model = QGT_model(config)  # Use the same configuration used during training
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     # Load the saved model checkpoint  
     
@@ -125,8 +126,9 @@ def test_sample(desired_num_of_queries,k):
     #checkpoint = torch.load("desert-vortex-1.pth",  map_location='cpu', weights_only=True) #k=6
     #checkpoint = torch.load("grateful-fire-1.pth",  map_location='cpu', weights_only=True) #k=7
     #checkpoint = torch.load("volcanic-dawn-1.pth",  map_location='cpu', weights_only=True) #k=8
-    checkpoint = torch.load("revived-feather-12.pth",  map_location='cpu', weights_only=True) #k=8
+    #checkpoint = torch.load("revived-feather-12.pth",  map_location=device, weights_only=True) #k=8
     #checkpoint = torch.load("northern-smoke-8.pth",  map_location='cpu', weights_only=True) #k=8
+    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
 
     
     
@@ -136,7 +138,6 @@ def test_sample(desired_num_of_queries,k):
     # Set the model to evaluation mode
     DT_model.eval()
 
-    device = 'cuda' if torch.cuda.is_available() else 'cpu'
 
     max_len = config.k  # Set max length
     pad_scalar_val=config.pad_scalar_val
@@ -292,8 +293,8 @@ def test_sample(desired_num_of_queries,k):
 
 
 
-def run_test_sample(des_len,k,_):
-    return test_sample(des_len,k)
+def run_test_sample(des_len, k, checkpoint, mode,_):
+    return test_sample(des_len, k, checkpoint, mode)
 
 
 
@@ -309,10 +310,12 @@ def main():
     parser.add_argument("--num_cores", type=int, default=6, help="Number of CPU cores to use")
     parser.add_argument("--des_len", type=int, default=6, help="Number of CPU cores to use")
     parser.add_argument("--k", type=int, default=10, help="k")
+    parser.add_argument("--checkpoint", type=str, required=True, help="Path to model checkpoint")
+    parser.add_argument("--mode", type=str, choices=["random", "DT"], default="DT", help="Mode of querying")
 
     args = parser.parse_args()
 
-    worker_fn = partial(run_test_sample, args.des_len, args.k)
+    worker_fn = partial(run_test_sample, args.des_len, args.k, args.checkpoint, args.mode)
 
     inputs = [args.des_len, args.k] * args.num_iter  # 👈 make it iterable!
 
@@ -327,9 +330,10 @@ def main():
 
     numbers, flags = zip(*results)
     result=np.array(numbers)
-    print(result.mean())
-    print(result.std())
-    print(sum(flags))
+    # print(result.mean())
+    # print(result.std())
+    # print(sum(flags))
+    return result.mean()
 
 
 if __name__ == "__main__":
