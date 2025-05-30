@@ -151,7 +151,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     rtgs=(pad_sequence(rtg, max_len,pad_scalar_val))
 
 
-    mask_length = torch.tensor(mask_length,device=device
+    mask_length = torch.tensor(mask_length,device=device)
     results = results.to(device)
     rtgs    = rtgs.to(device)
     queries = queries.to(device)
