@@ -151,7 +151,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     rtgs=(pad_sequence(rtg, max_len,pad_scalar_val))
 
 
-    mask_length = torch.tensor(mask_length).to(device)
+    mask_length = torch.tensor(mask_length,device=device
     results = results.to(device)
     rtgs    = rtgs.to(device)
     queries = queries.to(device)
@@ -162,7 +162,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
 
 
     x,x_half=random_integer_vector(config.k)
-    x_half_tensor=torch.tensor(x_half,dtype=torch.float32).to(device)
+    x_half_tensor=torch.tensor(x_half,dtype=torch.float32,device=device)
     G_model = GurobiModel("Incremental_ILP")
 
 
@@ -219,7 +219,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
 
         ###Sampling (soft)
         if sampling=="soft":
-            next_query = torch.bernoulli(probs)
+            next_query = torch.bernoulli(probs).to(device)
        
         elif sampling=="c":
         #thresholded Bernoulli sampler with a "certainty margin" c.
@@ -242,6 +242,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
         if num_of_constraints<config.k:
             queries[:,num_of_constraints,:]=next_query
         else:
+            next_query = next_query.to(queries.device)
             #queries = torch.cat([queries[:, 1:, :], next_query.unsqueeze(1)], dim=1)
             queries = torch.cat([queries[:, 1:, :], next_query.view(1, 1, -1).expand(queries.size(0), 1, -1)], dim=1)
 
@@ -254,7 +255,8 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
         next_query = next_query.to(x_half_tensor.device)
         new_result=torch.matmul(next_query,x_half_tensor)
         constraint = sum(selected_variables) == new_result.item()
-        
+        new_result = new_result.to(results.device)
+
         # Add the new constraint
 
     
@@ -278,7 +280,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
                     results[:,num_of_constraints]=new_result
                     mask_length[:,]=num_of_constraints+1
                 else:
-                    rtgs = torch.cat([rtgs[:, 1:], torch.full((rtgs.size(0), 1), -1, device=rtgs.device)], dim=1)
+                    rtgs = torch.cat([rtgs[:, 1:], torch.full((rtgs.size(0), 1), -1, device=device)], dim=1)
                     results = torch.cat([results[:, 1:], new_result.unsqueeze(1)], dim=1)
                     mask_length[:,]=config.k-1
 
