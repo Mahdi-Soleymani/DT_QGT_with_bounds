@@ -52,7 +52,6 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
     
     model.setParam(GRB.Param.PoolSearchMode, 2)
     max_num_of_sols_kept=num_of_total_sols(k)
-    print(max_num_of_sols_kept)
     model.setParam(GRB.Param.PoolSolutions, max_num_of_sols_kept)
     
     model.setObjective(1, GRB.MAXIMIZE)

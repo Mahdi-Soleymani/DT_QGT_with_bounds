@@ -11,8 +11,8 @@ for i in {1..10}; do
         --des_len $i \
         --num_iter 1000 \
         --num_cores 6 \
-        --k 10 \
-        --checkpoint revived-feather-12.pth \
+        --k 2 \
+        --checkpoint splendid-resonance-1.pth \
         --mode DT \
         >> "$LOG_FILE" 2>&1
 done
