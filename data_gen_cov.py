@@ -7,6 +7,12 @@ import argparse
 import os
 import multiprocessing as mp
 import concurrent.futures
+import math
+
+def num_of_total_sols(k):
+    """Calculates C(2k - 1, k) / k for a given k."""
+    if k < 1: raise ValueError("k must be a positive integer.")
+    return math.comb(2 * k - 1, k) 
 
 def pad_sequence(seq, max_len, pad_value=0):
     seq = np.array(seq, dtype=np.int8)
@@ -45,7 +51,9 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
     variables = [model.addVar(vtype=GRB.INTEGER, lb=0, ub=int(x[i].item()), name=f"x{i}") for i in range(k)]
     
     model.setParam(GRB.Param.PoolSearchMode, 2)
-    model.setParam(GRB.Param.PoolSolutions, 1000)
+    max_num_of_sols_kept=num_of_total_sols(k)
+    print(max_num_of_sols_kept)
+    model.setParam(GRB.Param.PoolSolutions, max_num_of_sols_kept)
     
     model.setObjective(1, GRB.MAXIMIZE)
     model.optimize()

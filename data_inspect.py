@@ -9,4 +9,4 @@ with h5py.File(file_path, "r") as f:
     for key in f.keys():
         data = f[key][:]
         print(f"\nDataset '{key}' shape: {data.shape}")
-        print(f"First few entries of '{key}':\n", data[:5])
+        print(f"First few entries of '{key}':\n", data[:300])

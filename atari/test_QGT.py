@@ -69,13 +69,13 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     # Initialize the model and config
     #mode="random"
     #mode="DT"
-    sampling="soft"
+    #sampling="soft"
     #sampling="c"
     c=0
-    # sampling="hard"
+    sampling="hard"
     config = t.TrainerConfig(
         k=10,
-        query_dim=10,
+        query_dim=k,
         lr=3e-4,
         max_epochs = 2,
         batch_size = 1,
@@ -86,7 +86,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
         lr_decay = False,
         warmup_tokens = 375e6,
         final_tokens = 260e9,
-        ckpt_path="comic-mountain-67.pth",  # Set a valid path if you want to save checkpoints
+        ckpt_path=checkpoint_path,  # Set a valid path if you want to save checkpoints
         num_workers=0,
         rtg_dim=1,
         n_embd=512,
@@ -99,11 +99,14 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
         resid_pdrop=0.1,
         pad_scalar_val=-100,
         pad_vec_val=-30,
-        desired_num_of_queries=8
+        desired_num_of_queries=8,
+        upper_bound_dim=10
     )
     config.k=k
     config.query_dim=config.k
+    config.upper_bound_dim=config.k
     config.desired_num_of_queries=desired_num_of_queries
+
     # Initialize your model architecture (it should be the same as during training)
     DT_model = QGT_model(config)  # Use the same configuration used during training
     #device = 'cuda' if torch.cuda.is_available() else 'cpu'
@@ -195,7 +198,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     queries = queries.unsqueeze(0)
     mask_length = mask_length.unsqueeze(0)  # Adds batch dimension, result shape: [1, 10, 10]
 
-    while not is_solved:
+    while not is_solved and num_of_constraints<5 :
 
         with torch.no_grad():  # No need to track gradients during inference
             if mode=="DT":
@@ -334,8 +337,8 @@ def main():
     result=np.array(numbers)
     print(f"des_len:{args.des_len}")
     print(result.mean())
-    # print(result.std())
-    # print(sum(flags))
+    print(result.std())
+    print(sum(flags))
     return result.mean()
 
 
