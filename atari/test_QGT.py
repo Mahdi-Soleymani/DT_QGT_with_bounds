@@ -69,10 +69,10 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     # Initialize the model and config
     #mode="random"
     #mode="DT"
-    #sampling="soft"
+    sampling="soft"
     #sampling="c"
-    c=0
-    sampling="hard"
+    #c=.3
+    #sampling="hard"
     config = t.TrainerConfig(
         k=10,
         query_dim=k,
@@ -198,7 +198,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     queries = queries.unsqueeze(0)
     mask_length = mask_length.unsqueeze(0)  # Adds batch dimension, result shape: [1, 10, 10]
 
-    while not is_solved and num_of_constraints<5 :
+    while not is_solved and num_of_constraints<config.k :
 
         with torch.no_grad():  # No need to track gradients during inference
             if mode=="DT":
@@ -219,7 +219,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
                 #probs = torch.randint(0, 2, (config.batch_size, config.block_size, config.k)).float()
 
         
-
+        
         ###Sampling (soft)
         if sampling=="soft":
             next_query = torch.bernoulli(probs).to(device)
