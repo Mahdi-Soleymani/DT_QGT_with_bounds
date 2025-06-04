@@ -13,6 +13,7 @@ import gurobipy as gp
 
 import matplotlib.pyplot as plt
 import os
+import pickle
 
 
 
@@ -20,6 +21,54 @@ import os
 from mingpt.model_QGT import DecisionTransformer as QGT_model  # Alias your custom model
 from gurobipy import Model as GurobiModel  # Alias Gurobi's Model
 
+import torch
+
+def flip_or_randomize(next_query):
+    if torch.all(next_query == 0):
+        # Generate new random binary vector with P(1) = 0.5
+        next_query = torch.randint(0, 2, next_query.shape, dtype=next_query.dtype)
+    else:
+        idx = torch.randint(0, next_query.size(0), (1,))
+        next_query[idx] = 1 - next_query[idx]
+    return next_query
+
+
+def is_linearly_independent_real(vectors: list[list[float]]) -> bool:
+    """
+    Checks if a list of vectors is linearly independent over real numbers.
+
+    Args:
+        vectors (list[list[float]]): A list of vectors (lists of numbers).
+                                     All vectors must have the same length.
+                                     Can contain any real numbers (0s, 1s, decimals, etc.).
+
+    Returns:
+        bool: True if all provided vectors are linearly independent, False otherwise.
+    
+    Raises:
+        ValueError: If the input list is not valid (e.g., inconsistent lengths).
+    """
+    if not vectors:
+        return True # An empty set of vectors is considered linearly independent
+
+    num_vectors = len(vectors)
+    vector_length = len(vectors[0])
+
+    # Input validation: Check if all vectors have the same length
+    if not all(len(v) == vector_length for v in vectors):
+        raise ValueError("All vectors must have the same length.")
+    
+    # Convert list of lists to a NumPy array
+    # np.array will automatically infer the appropriate dtype (e.g., float64)
+    #matrix = np.ar43p0-ray(vectors)
+    matrix = np.stack([v.detach().cpu().numpy() if isinstance(v, torch.Tensor) else np.array(v) for v in vectors])
+
+    # Calculate the rank of the matrix
+    # np.linalg.matrix_rank works by default over real/complex numbers
+    rank = np.linalg.matrix_rank(matrix)
+
+    # If the rank equals the number of vectors, they are linearly independent
+    return rank == num_vectors
 
 def random_integer_vector(k):
     x = np.zeros(k, dtype=int) # Initialize a zero vector
@@ -65,14 +114,14 @@ def pad_sequence2d(seq, max_len, pad_value=0):
 
 
 
-def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
+def test_sample(desired_num_of_queries, k, checkpoint_cov_path, checkpoint_rand_path, mode, pickel_dict):
     # Initialize the model and config
     #mode="random"
     #mode="DT"
-    sampling="soft"
+    #sampling="soft"
     #sampling="c"
-    #c=.3
-    #sampling="hard"
+    c=.3
+    sampling="hard"
     config = t.TrainerConfig(
         k=10,
         query_dim=k,
@@ -86,7 +135,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
         lr_decay = False,
         warmup_tokens = 375e6,
         final_tokens = 260e9,
-        ckpt_path=checkpoint_path,  # Set a valid path if you want to save checkpoints
+        ckpt_path=checkpoint_cov_path,  # Set a valid path if you want to save checkpoints
         num_workers=0,
         rtg_dim=1,
         n_embd=512,
@@ -108,9 +157,10 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     config.desired_num_of_queries=desired_num_of_queries
 
     # Initialize your model architecture (it should be the same as during training)
-    DT_model = QGT_model(config)  # Use the same configuration used during training
+    DT_cov_model = QGT_model(config)  # Use the same configuration used during training
     #device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    device='cpu'
+    DT_rand_model = QGT_model(config)
+    device='cpu' 
     # Load the saved model checkpoint  
     
     #checkpoint = torch.load("comic-mountain-67.pth",  map_location=torch.device("cpu"))
@@ -131,15 +181,19 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     #checkpoint = torch.load("volcanic-dawn-1.pth",  map_location='cpu', weights_only=True) #k=8
     #checkpoint = torch.load("revived-feather-12.pth",  map_location=device, weights_only=True) #k=8
     #checkpoint = torch.load("northern-smoke-8.pth",  map_location='cpu', weights_only=True) #k=8
-    checkpoint = torch.load(checkpoint_path, map_location=device, weights_only=True)
+    checkpoint_cov= torch.load(checkpoint_cov_path, map_location=device, weights_only=True)
+    checkpoint_rand= torch.load(checkpoint_rand_path, map_location=device, weights_only=True)
 
     
     
     # Load the model weights directly from the checkpoint
-    DT_model.load_state_dict(checkpoint)
+    DT_cov_model.load_state_dict(checkpoint_cov)
+    DT_rand_model.load_state_dict(checkpoint_rand)
+
 
     # Set the model to evaluation mode
-    DT_model.eval()
+    DT_cov_model.eval()
+    DT_rand_model.eval()
 
 
     max_len = config.k  # Set max length
@@ -147,7 +201,17 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
     pad_vec_val=config.pad_vec_val
 
 
+    x,x_half=random_integer_vector(config.k)
+    x_half_tensor=torch.tensor(x_half,dtype=torch.float32,device=device)
+    G_model = GurobiModel("Incremental_ILP")
 
+
+#### variabale des_len
+    # key = tuple(x.flatten().tolist())
+    # if key in pickel_dict:
+    #     config.desired_num_of_queries=pickel_dict[key]
+    
+    # print(config.desired_num_of_queries)
     q, r, rtg, mask_length= [ torch.full((config.k,), pad_vec_val, dtype=torch.int)],[config.k],[-config.desired_num_of_queries], 1   # Generate a sequence
     queries=(pad_sequence2d(q, max_len,pad_vec_val))  # Pad queries
     results=(pad_sequence(r, max_len,pad_scalar_val))
@@ -164,9 +228,6 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
 
 
 
-    x,x_half=random_integer_vector(config.k)
-    x_half_tensor=torch.tensor(x_half,dtype=torch.float32,device=device)
-    G_model = GurobiModel("Incremental_ILP")
 
 
 
@@ -192,26 +253,43 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
 
     num_of_constraints=0
     is_solved=False
+    model="cov"
+    queries_list=[]
 
     rtgs = rtgs.unsqueeze(0)  # Adds batch dimension, result shape: [1, 10]
     results = results.unsqueeze(0)  # Adds batch dimension, result shape: [1, 10]
     queries = queries.unsqueeze(0)
     mask_length = mask_length.unsqueeze(0)  # Adds batch dimension, result shape: [1, 10, 10]
-
-    while not is_solved and num_of_constraints<config.k :
-
+    # while not is_solved and num_of_constraints<config.k :
+    while not is_solved:
         with torch.no_grad():  # No need to track gradients during inference
             if mode=="DT":
                 
                 ### from model
-                upper_bounds = torch.tensor(x, dtype=torch.float32).to(device)
-                upper_bounds = upper_bounds.unsqueeze(0)  # Shape: (1, k)
 
-                probs,_=DT_model( mask_length, rtgs,  results, upper_bounds, queries)
-                if num_of_constraints<config.k:
-                    probs=probs[:,num_of_constraints,:]
-                else:
-                    probs=probs[:,config.k-1,:]
+                upper_bounds = torch.tensor(x, dtype=torch.float32).to(device)
+                upper_bounds = upper_bounds.unsqueeze(0)  # Shaperrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrrr: (1, k)
+                if model=="cov":
+                    probs,_=DT_cov_model( mask_length, rtgs,  results, upper_bounds, queries)
+                    sampling="hard"
+                    if num_of_constraints<config.k:
+                        probs=probs[:,num_of_constraints,:]
+                    else:
+                        probs=probs[:,config.k-1,:]
+                elif model=="rand":
+                    # probs,_=DT_rand_model(mask_length, rtgs,  results, upper_bounds, queries)
+                    sampling="soft"
+                    probs=.5*torch.ones(config.batch_size,config.k).float()
+
+                    # if num_of_constraints<config.k:
+                    #     probs=probs[:,num_of_constraints,:]
+                    # else:
+                    #     probs=probs[:,config.k-1,:]
+
+                # if num_of_constraints<config.k:
+                #     probs=probs[:,num_of_constraints,:]
+                # else:
+                #     probs=probs[:,config.k-1,:]
 
             elif mode=="random":
             ######## Random queries
@@ -240,7 +318,31 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
             next_query = (probs > 0.5).float()
 
         next_query=next_query[0,:]
+        queries_list.append(next_query)
         num_of_constraints+=1
+        # print(probs)
+        # print(next_query)
+        if not is_linearly_independent_real(queries_list):
+           
+            #print("we are here")
+            model="rand"
+            while not is_linearly_independent_real(queries_list):
+                queries_list.pop()
+                #probs,_=DT_rand_model(mask_length, rtgs,  results, upper_bounds, queries)
+                probs=.5*torch.ones(config.batch_size,config.k).float()
+                next_query=flip_or_randomize(next_query)
+                # sampling="soft"
+                # # if num_of_constraints<config.k:
+                # #     probs=probs[:,num_of_constraints,:]
+                # # else:
+                # #     probs=probs[:,config.k-1,:]
+                # next_query = torch.bernoulli(probs).to(device)
+                # next_query=next_query[0,:]
+                queries_list.append(next_query)
+                #print(next_query)
+            model="cov"
+            sampling="hard"
+
 
         if num_of_constraints<config.k:
             queries[:,num_of_constraints,:]=next_query
@@ -292,14 +394,14 @@ def test_sample(desired_num_of_queries, k, checkpoint_path, mode):
             print(f"No solution found!")
         
     
-
+    # print("end")
 
     return num_of_constraints, is_solved
 
 
 
-def run_test_sample(des_len, k, checkpoint, mode,_):
-    return test_sample(des_len, k, checkpoint, mode)
+def run_test_sample(des_len, k, checkpoint_cov, checkpoint_rand, mode, pickel_dict,_):
+    return test_sample(des_len, k, checkpoint_cov, checkpoint_rand, mode, pickel_dict)
 
 
 
@@ -315,14 +417,19 @@ def main():
     parser.add_argument("--num_cores", type=int, default=6, help="Number of CPU cores to use")
     parser.add_argument("--des_len", type=int, default=6, help="Number of CPU cores to use")
     parser.add_argument("--k", type=int, default=10, help="k")
-    parser.add_argument("--checkpoint", type=str, required=True, help="Path to model checkpoint")
+    parser.add_argument("--checkpoint_rand", type=str, required=True, help="Path to model checkpoint")
+    parser.add_argument("--checkpoint_cov", type=str, required=True, help="Path to model checkpoint")
+    parser.add_argument("--pickle", type=str, required=True, help="Path to model checkpoint")
     parser.add_argument("--mode", type=str, choices=["random", "DT"], default="DT", help="Mode of querying")
 
     args = parser.parse_args()
 
-    worker_fn = partial(run_test_sample, args.des_len, args.k, args.checkpoint, args.mode)
+    with open(args.pickle, "rb") as f:
+        pickle_dict = pickle.load(f)
 
-    inputs = [args.des_len, args.k] * args.num_iter  # 👈 make it iterable!
+    worker_fn = partial(run_test_sample, args.des_len, args.k, args.checkpoint_cov,args.checkpoint_rand, args.mode, pickle_dict)
+
+    inputs = [args.des_len, args.k] * args.num_iter  # make it iterable!
 
 
     with concurrent.futures.ProcessPoolExecutor(max_workers=args.num_cores) as executor:
@@ -339,7 +446,16 @@ def main():
     print(result.mean())
     print(result.std())
     print(sum(flags))
-    return result.mean()
+    print(result)
+    
+
+    # plt.hist(result, bins=np.arange(result.min(), result.max()+2) - 0.5, edgecolor='black')
+    # plt.title("Histogram of Results")
+    # plt.xlabel("Value")
+    # plt.ylabel("Frequency")
+    # plt.grid(True)
+    # plt.show()
+    # return result.mean()
 
 
 if __name__ == "__main__":
