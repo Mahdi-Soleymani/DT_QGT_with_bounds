@@ -4,7 +4,7 @@ LOG_FILE="test_all_dlen.log"
 mkdir -p logs
 echo "Starting test sweep..." > "$LOG_FILE"
 
-for i in {1..10}; do
+for i in {1..1}; do
     echo "Running with --des_len=$i" | tee -a "$LOG_FILE"
 
     python atari/test_QGT.py \
@@ -14,7 +14,7 @@ for i in {1..10}; do
         --k 8 \
         --checkpoint_cov stilted-oath-2.pth \
         --checkpoint_rand stilted-oath-2.pth \
-        --mode DT \
+        --mode hadamard \
         --pickle dataset_k7.pkl
         >> "$LOG_FILE" 2>&1
 done

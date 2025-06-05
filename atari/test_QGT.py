@@ -14,6 +14,7 @@ import gurobipy as gp
 import matplotlib.pyplot as plt
 import os
 import pickle
+import hadamard as h
 
 
 
@@ -156,11 +157,14 @@ def test_sample(desired_num_of_queries, k, checkpoint_cov_path, checkpoint_rand_
     config.upper_bound_dim=config.k
     config.desired_num_of_queries=desired_num_of_queries
 
-    # Initialize your model architecture (it should be the same as during training)
-    DT_cov_model = QGT_model(config)  # Use the same configuration used during training
-    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
-    DT_rand_model = QGT_model(config)
+
     device='cpu' 
+
+    # Initialize your model architecture (it should be the same as during training)
+    if mode=="DT":
+        DT_cov_model = QGT_model(config)  # Use the same configuration used during training
+    #device = 'cuda' if torch.cuda.is_available() else 'cpu'
+        DT_rand_model = QGT_model(config)
     # Load the saved model checkpoint  
     
     #checkpoint = torch.load("comic-mountain-67.pth",  map_location=torch.device("cpu"))
@@ -181,19 +185,19 @@ def test_sample(desired_num_of_queries, k, checkpoint_cov_path, checkpoint_rand_
     #checkpoint = torch.load("volcanic-dawn-1.pth",  map_location='cpu', weights_only=True) #k=8
     #checkpoint = torch.load("revived-feather-12.pth",  map_location=device, weights_only=True) #k=8
     #checkpoint = torch.load("northern-smoke-8.pth",  map_location='cpu', weights_only=True) #k=8
-    checkpoint_cov= torch.load(checkpoint_cov_path, map_location=device, weights_only=True)
-    checkpoint_rand= torch.load(checkpoint_rand_path, map_location=device, weights_only=True)
+        checkpoint_cov= torch.load(checkpoint_cov_path, map_location=device, weights_only=True)
+        checkpoint_rand= torch.load(checkpoint_rand_path, map_location=device, weights_only=True)
 
     
     
     # Load the model weights directly from the checkpoint
-    DT_cov_model.load_state_dict(checkpoint_cov)
-    DT_rand_model.load_state_dict(checkpoint_rand)
+        DT_cov_model.load_state_dict(checkpoint_cov)
+        DT_rand_model.load_state_dict(checkpoint_rand)
 
 
-    # Set the model to evaluation mode
-    DT_cov_model.eval()
-    DT_rand_model.eval()
+        # Set the model to evaluation mode
+        DT_cov_model.eval()
+        DT_rand_model.eval()
 
 
     max_len = config.k  # Set max length
@@ -225,7 +229,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_cov_path, checkpoint_rand_
 
 
 
-
+    h_mat=h.generate_sorted_kronecker(config.k)
 
 
 
@@ -295,6 +299,14 @@ def test_sample(desired_num_of_queries, k, checkpoint_cov_path, checkpoint_rand_
             ######## Random queries
                 probs=.5*torch.ones(config.batch_size,config.k).float()
                 #probs = torch.randint(0, 2, (config.batch_size, config.block_size, config.k)).float()
+            
+            elif mode=="hadamard":
+                # probs=.5*torch.ones(config.batch_size,config.k).float()
+                # probs=h_mat[num_of_constraints,:]
+                probs = torch.tensor(h_mat[num_of_constraints], dtype=torch.float32)
+                probs =probs.unsqueeze(0).repeat(config.batch_size, 1)
+
+                
 
         
         
@@ -345,7 +357,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_cov_path, checkpoint_rand_
 
 
         if num_of_constraints<config.k:
-            queries[:,num_of_constraints,:]=next_query
+            queries[:, num_of_constraints,:] = next_query
         else:
             next_query = next_query.to(queries.device)
             #queries = torch.cat([queries[:, 1:, :], next_query.unsqueeze(1)], dim=1)
@@ -416,12 +428,11 @@ def main():
     parser.add_argument("--num_iter", type=int, default=10, help="Number of iterations")
     parser.add_argument("--num_cores", type=int, default=6, help="Number of CPU cores to use")
     parser.add_argument("--des_len", type=int, default=6, help="Number of CPU cores to use")
-    parser.add_argument("--k", type=int, default=10, help="k")
+    parser.add_argument("--k", type=int, default=4, help="k")
     parser.add_argument("--checkpoint_rand", type=str, required=True, help="Path to model checkpoint")
     parser.add_argument("--checkpoint_cov", type=str, required=True, help="Path to model checkpoint")
     parser.add_argument("--pickle", type=str, required=True, help="Path to model checkpoint")
-    parser.add_argument("--mode", type=str, choices=["random", "DT"], default="DT", help="Mode of querying")
-
+    parser.add_argument("--mode", type=str, choices=["random", "DT", "hadamard"], default="DT", help="Mode of querying")
     args = parser.parse_args()
 
     with open(args.pickle, "rb") as f:
@@ -446,7 +457,6 @@ def main():
     print(result.mean())
     print(result.std())
     print(sum(flags))
-    print(result)
     
 
     # plt.hist(result, bins=np.arange(result.min(), result.max()+2) - 0.5, edgecolor='black')

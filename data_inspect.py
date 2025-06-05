@@ -1,7 +1,7 @@
 import h5py
 
-#file_path = "dataset_k10.h5"  # or f"{f_name}.h5"
-file_path = "data_cov/k_9/10M_k9.h5"  # or f"{f_name}.h5"
+file_path = "dataset_k3_len3.h5"  # or f"{f_name}.h5"
+#file_path = "data_cov/k_9/10M_k9.h5"  # or f"{f_name}.h5"
 
 
 with h5py.File(file_path, "r") as f:
@@ -11,4 +11,4 @@ with h5py.File(file_path, "r") as f:
     for key in f.keys():
         data = f[key][:]
         print(f"\nDataset '{key}' shape: {data.shape}")
-        print(f"First few entries of '{key}':\n", data[:300])
+        print(f"First few entries of '{key}':\n", data[:30])

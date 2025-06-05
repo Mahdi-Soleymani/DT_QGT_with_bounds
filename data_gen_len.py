@@ -101,7 +101,7 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
     rtg_padded = pad_sequence(rtg[:max_len], max_len, pad_scalar_val)
     return q_padded, r_padded, rtg_padded, np.int8(mask_length), np.squeeze(x)
 
-def generate_and_store_sample(worker_id, num_samples_per_worker, k, max_len, pad_scalar_val, pad_vec_val, file_prefix, desired_mask_length):
+def generate_and_store_sample(worker_id, num_samples_per_worker, k, max_len, pad_scalar_val, pad_vec_val, file_prefix, desired_len):
     file_name = f"{file_prefix}_{worker_id}.h5"
     with h5py.File(file_name, 'w') as f:
         d_queries = f.create_dataset("queries", (num_samples_per_worker, max_len, k), dtype='i1')
@@ -111,7 +111,7 @@ def generate_and_store_sample(worker_id, num_samples_per_worker, k, max_len, pad
         d_bounds = f.create_dataset("upper_bounds", (num_samples_per_worker, k), dtype='i1')
 
         pbar = tqdm(total=num_samples_per_worker, position=worker_id, desc=f"Worker {worker_id}", leave=True)
-        desired_mask_length = max_len  # or set your own value
+        #desired_mask_length = max_len  # or set your own value
 
         
         sample_idx = 0
@@ -119,7 +119,7 @@ def generate_and_store_sample(worker_id, num_samples_per_worker, k, max_len, pad
             q, r, rtg, mask_length, d_bound = generate_covariance_maximizing_sample(
                 k, max_len, pad_scalar_val, pad_vec_val
             )
-            if mask_length != desired_mask_length:
+            if rtg[0] != -desired_len:
                 continue  # skip sample
 
             d_queries[sample_idx] = q
@@ -151,7 +151,7 @@ def merge_datasets(input_files, output_file):
     for file in input_files:
         os.remove(file)
 
-def save_dataset_parallel(filename, num_samples, k, max_len, pad_scalar_val, pad_vec_val, num_cores, desired_mask_length):
+def save_dataset_parallel(filename, num_samples, k, max_len, pad_scalar_val, pad_vec_val, num_cores, desired_len):
     file_prefix = "temp_sample_file_worker"
     print(f"Using {num_cores} CPU cores for parallel processing...")
     samples_per_worker = num_samples // num_cores
@@ -171,7 +171,7 @@ def save_dataset_parallel(filename, num_samples, k, max_len, pad_scalar_val, pad
                     pad_scalar_val,
                     pad_vec_val,
                     file_prefix, 
-                    desired_mask_length
+                    desired_len
                 ))
         concurrent.futures.wait(futures)
 
@@ -188,20 +188,20 @@ if __name__ == '__main__':
     mp.set_start_method("spawn", force=True)
     parser = argparse.ArgumentParser()
     parser.add_argument("--n_cores", type=int, default=1, help="Number of CPU cores to use")
-    parser.add_argument('--num_samples', type=int, default=1000, help='Total number of samples to generate')
+    parser.add_argument('--num_samples', type=int, default=100, help='Total number of samples to generate')
     parser.add_argument('--file_name', type=str, default="dataset", help='Name of the output file')
-    parser.add_argument("--k", type=int, default=7, help="Length of the query vector")
-    parser.add_argument("--desired_mask_length", type=int, default=5, help="Length of the query vector")
+    parser.add_argument("--k", type=int, default=3, help="Length of the query vector")
+    parser.add_argument("--desired_len", type=int, default=3, help="Length of the query vector")
 
     args = parser.parse_args()
     k = args.k
     max_len = k
     pad_scalar_val = -10
     pad_vec_val = -30
-    f_name = f"{args.file_name}_k{k}_len{args.desired_mask_length}.h5"
+    f_name = f"{args.file_name}_k{k}_len{args.desired_len}.h5"
     n_cores = min(args.n_cores, os.cpu_count())
 
-    save_dataset_parallel(f_name, args.num_samples, k, max_len, pad_scalar_val, pad_vec_val, n_cores, args.desired_mask_length)
+    save_dataset_parallel(f_name, args.num_samples, k, max_len, pad_scalar_val, pad_vec_val, n_cores, args.desired_len)
     count_samples_in_h5(f_name)
 
     file_size_mb = os.path.getsize(f_name) / (1024 * 1024)
