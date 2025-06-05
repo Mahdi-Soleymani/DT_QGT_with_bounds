@@ -63,5 +63,5 @@ def count_x_xhalf_pairs(k):
         total += num_x_half
     return total
 
-
+print(count_x_xhalf_pairs(3))
 
