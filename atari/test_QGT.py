@@ -139,7 +139,7 @@ def test_sample(desired_num_of_queries, k, checkpoint_cov_path, checkpoint_rand_
         ckpt_path=checkpoint_cov_path,  # Set a valid path if you want to save checkpoints
         num_workers=0,
         rtg_dim=1,
-        n_embd=512,
+        n_embd=128,
         query_result_dim=1,
         block_size=10,### number of max timesteps in sequence (seq len=3 times this)
         embd_pdrop = 0.1,
