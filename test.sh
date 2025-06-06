@@ -4,18 +4,18 @@ LOG_FILE="test_all_dlen.log"
 mkdir -p logs
 echo "Starting test sweep..." > "$LOG_FILE"
 
-for i in {2..2}; do
+for i in {1..2}; do
     echo "Running with --des_len=$i" | tee -a "$LOG_FILE"
 
     python atari/test_QGT.py \
-        --des_len 1 \
+        --des_len $i \
         --num_iter 1000 \
         --num_cores 6 \
-        --k 4 \
-        --checkpoint_cov silver-breeze-4.pth \
-        --checkpoint_rand silver-breeze-4.pth \
+        --k 5 \
+        --checkpoint_cov brisk-aardvark-7.pth \
+        --checkpoint_rand brisk-aardvark-7.pth \
         --mode DT \
-        --pickle dataset_k7.pkl
+        --pickle models/dataset_k7.pkl
         >> "$LOG_FILE" 2>&1
 done
 

@@ -7,13 +7,6 @@ import argparse
 import os
 import multiprocessing as mp
 import concurrent.futures
-import math
-import Xpair_gen as XP
-
-def num_of_total_sols(k):
-    """Calculates C(2k - 1, k) / k for a given k."""
-    if k < 1: raise ValueError("k must be a positive integer.")
-    return math.comb(2 * k - 1, k) 
 
 def pad_sequence(seq, max_len, pad_value=0):
     seq = np.array(seq, dtype=np.int8)
@@ -33,14 +26,14 @@ def pad_sequence2d(seq, max_len, pad_value=0):
         seq = np.vstack((seq, pad_matrix))
     return seq
 
-def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_val, x, x_half):
-    # x = np.zeros(k, dtype=int)
-    # x_half = np.zeros(k, dtype=int)
-    # for i in range(k):
-    #     idx = np.random.choice(k, 1)
-    #     x[idx] += 1
-    #     if random.random() < 0.5:
-    #         x_half[idx] += 1
+def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_val):
+    x = np.zeros(k, dtype=int)
+    x_half = np.zeros(k, dtype=int)
+    for i in range(k):
+        idx = np.random.choice(k, 1)
+        x[idx] += 1
+        if random.random() < 0.5:
+            x_half[idx] += 1
 
     x = x.reshape(-1, 1)
     x_half = x_half.reshape(-1, 1)
@@ -50,16 +43,14 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
     model.setParam(GRB.Param.Threads, 1)
 
     variables = [model.addVar(vtype=GRB.INTEGER, lb=0, ub=int(x[i].item()), name=f"x{i}") for i in range(k)]
-    
     model.setParam(GRB.Param.PoolSearchMode, 2)
-    max_num_of_sols_kept=num_of_total_sols(k)
-    model.setParam(GRB.Param.PoolSolutions, max_num_of_sols_kept)
-    
     model.setObjective(1, GRB.MAXIMIZE)
     model.optimize()
+
     q, r, rwrd = [], [], [-1]
     num_of_constraints = 0
     is_solved = False
+
     while not is_solved:
         num_solutions = model.SolCount
         if num_solutions < 2:
@@ -112,31 +103,24 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
 
 def generate_and_store_sample(worker_id, num_samples_per_worker, k, max_len, pad_scalar_val, pad_vec_val, file_prefix):
     file_name = f"{file_prefix}_{worker_id}.h5"
-    sol_count=XP.count_x_xhalf_pairs(k)
-    print(sol_count * num_samples_per_worker)
     with h5py.File(file_name, 'w') as f:
-        d_queries = f.create_dataset("queries", (num_samples_per_worker*sol_count, max_len, k), dtype='i1')
-        d_results = f.create_dataset("results", (num_samples_per_worker*sol_count, max_len), dtype='i1')
-        d_rtgs = f.create_dataset("rtgs", (num_samples_per_worker*sol_count, max_len), dtype='i1')
-        d_mask_lengths = f.create_dataset("mask_lengths", (num_samples_per_worker*sol_count,), dtype='i1')
-        d_bounds = f.create_dataset("upper_bounds", (num_samples_per_worker*sol_count, k), dtype='i1')
+        d_queries = f.create_dataset("queries", (num_samples_per_worker, max_len, k), dtype='i1')
+        d_results = f.create_dataset("results", (num_samples_per_worker, max_len), dtype='i1')
+        d_rtgs = f.create_dataset("rtgs", (num_samples_per_worker, max_len), dtype='i1')
+        d_mask_lengths = f.create_dataset("mask_lengths", (num_samples_per_worker,), dtype='i1')
+        d_bounds = f.create_dataset("upper_bounds", (num_samples_per_worker, k), dtype='i1')
 
-        pbar = tqdm(total=num_samples_per_worker*sol_count, position=worker_id, desc=f"Worker {worker_id}", leave=True)
-        generator = XP.XPairGenerator(k)
-        sample_idx = 0
-        while True:
-            x, x_half, done = generator.get_next()
-            if done:
-                break
-            for _ in range(num_samples_per_worker):
-                q, r, rtg, mask_length, d_bound = generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_val, x, x_half)
-                d_queries[sample_idx] = q
-                d_results[sample_idx] = r
-                d_rtgs[sample_idx] = rtg
-                d_mask_lengths[sample_idx] = mask_length
-                d_bounds[sample_idx] = d_bound
-                sample_idx += 1
-                pbar.update(1)
+        pbar = tqdm(total=num_samples_per_worker, position=worker_id, desc=f"Worker {worker_id}", leave=True)
+
+        for i in range(num_samples_per_worker):
+            q, r, rtg, mask_length, d_bound = generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_val)
+            d_queries[i] = q
+            d_results[i] = r
+            d_rtgs[i] = rtg
+            d_mask_lengths[i] = mask_length
+            d_bounds[i] = d_bound
+            if i % 100 == 0:
+                pbar.update(100)
         pbar.close()
 
     print(f"Worker {worker_id} saved {num_samples_per_worker} samples to {file_name}")
@@ -176,7 +160,6 @@ def save_dataset_parallel(filename, num_samples, k, max_len, pad_scalar_val, pad
                     pad_scalar_val,
                     pad_vec_val,
                     file_prefix
-                    
                 ))
         concurrent.futures.wait(futures)
 
@@ -192,10 +175,10 @@ def count_samples_in_h5(file_name):
 if __name__ == '__main__':
     mp.set_start_method("spawn", force=True)
     parser = argparse.ArgumentParser()
-    parser.add_argument("--n_cores", type=int, default=6, help="Number of CPU cores to use")
-    parser.add_argument('--num_samples', type=int, default=1, help='Total number of samples to generate')
+    parser.add_argument("--n_cores", type=int, default=1, help="Number of CPU cores to use")
+    parser.add_argument('--num_samples', type=int, default=100000, help='Total number of samples to generate')
     parser.add_argument('--file_name', type=str, default="dataset", help='Name of the output file')
-    parser.add_argument("--k", type=int, default=3, help="Length of the query vector")
+    parser.add_argument("--k", type=int, default=7, help="Length of the query vector")
 
     args = parser.parse_args()
     k = args.k

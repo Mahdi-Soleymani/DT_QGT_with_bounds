@@ -33,7 +33,7 @@ def pad_sequence2d(seq, max_len, pad_value=0):
         seq = np.vstack((seq, pad_matrix))
     return seq
 
-def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_val, x, x_half):
+def generate_random_sample(k, max_len, pad_scalar_val, pad_vec_val, x, x_half):
     # x = np.zeros(k, dtype=int)
     # x_half = np.zeros(k, dtype=int)
     # for i in range(k):
@@ -60,32 +60,22 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
     q, r, rwrd = [], [], [-1]
     num_of_constraints = 0
     is_solved = False
+   
     while not is_solved:
-        num_solutions = model.SolCount
-        if num_solutions < 2:
-            break
-        solution_matrix = np.zeros((num_solutions, k))
-        for sol_index in range(num_solutions):
-            model.setParam(GRB.Param.SolutionNumber, sol_index)
-            solution_matrix[sol_index] = [var.Xn for var in variables]
-        cov_matrix = np.cov(solution_matrix, rowvar=False)
-
-        model_cov = Model("Maximize_Variance")
-        model_cov.setParam(GRB.Param.OutputFlag, 0)
-        I = model_cov.addVars(k, vtype=GRB.BINARY, name="I")
-        quad_expr = sum(I[i] * cov_matrix[i, j] * I[j] for i in range(k) for j in range(k))
-        model_cov.setObjective(quad_expr, GRB.MAXIMIZE)
-        model_cov.optimize()
-
-        selected_indices = [i for i in range(k) if I[i].X > 0.5]
         selected_mask = np.zeros(k, dtype=int)
-        for i in selected_indices:
-            selected_mask[i] = 1
-        q.append(selected_mask)
+        selected_variables = []
+
+        while not selected_variables:
+            for i, var in enumerate(variables):
+                if random.random() < 0.5:
+                    selected_variables.append(var)
+                    selected_mask[i] = 1
+
         new_result = np.matmul(selected_mask, x_half)[0]
         r.append(int(new_result))
-
-        model.addConstr(sum(variables[i] for i in selected_indices) == new_result, name=f"c{num_of_constraints}")
+        q.append(selected_mask)
+        constraint = sum(selected_variables) == new_result
+        model.addConstr(constraint, name=f"c{num_of_constraints}")
         num_of_constraints += 1
         model.optimize()
 
@@ -96,18 +86,20 @@ def generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_va
             else:
                 rwrd.append(-1)
         else:
-            rwrd.append(0)
             is_solved = True
+            rwrd.append(0)
 
     rtg, s = [], 0
     for reward in reversed(rwrd):
         s += reward
         rtg.append(s)
     rtg = list(reversed(rtg))
+
     mask_length = min(len(rtg), max_len)
     q_padded = pad_sequence2d(q[:max_len], max_len, pad_vec_val)
     r_padded = pad_sequence(r[:max_len], max_len, pad_scalar_val)
     rtg_padded = pad_sequence(rtg[:max_len], max_len, pad_scalar_val)
+
     return q_padded, r_padded, rtg_padded, np.int8(mask_length), np.squeeze(x)
 
 def generate_and_store_sample(worker_id, num_samples_per_worker, k, max_len, pad_scalar_val, pad_vec_val, file_prefix):
@@ -129,7 +121,7 @@ def generate_and_store_sample(worker_id, num_samples_per_worker, k, max_len, pad
             if done:
                 break
             for _ in range(num_samples_per_worker):
-                q, r, rtg, mask_length, d_bound = generate_covariance_maximizing_sample(k, max_len, pad_scalar_val, pad_vec_val, x, x_half)
+                q, r, rtg, mask_length, d_bound = generate_random_sample(k, max_len, pad_scalar_val, pad_vec_val, x, x_half)
                 d_queries[sample_idx] = q
                 d_results[sample_idx] = r
                 d_rtgs[sample_idx] = rtg
